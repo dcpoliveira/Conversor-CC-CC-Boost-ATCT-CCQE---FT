@@ -1,0 +1,258 @@
+#include "Perif_Setup.h"
+#include "math.h"
+
+
+
+
+uint32_t count = 0;
+Uint16 DutyCycle = 814;
+Uint16 TB_Prd = 1428;
+Uint16 amp = 1;
+Uint16 pontos = 2500;
+Uint16 FREQ_PER = 10;
+float32 temp;
+
+__interrupt void isr_timer0(void);
+
+
+int16_t index =0, senotable[];
+
+
+int main(void)
+{
+
+    InitSysCtrl();    //Inicializar a CPU
+
+    DINT;
+
+    InitPieCtrl();
+    InitGpio();                             // Inicialização do GPIO
+
+    IER = 0x0000;          //Desabilita interrupções da cpu
+    IFR = 0x0000;          //Apaga os flags
+
+
+    InitPieVectTable();    //Inicializa a tabela de vetores
+
+
+    //Interrupções
+    EALLOW;
+    PieVectTable.TIMER0_INT = &isr_timer0;
+    PieCtrlRegs.PIEIER1.bit.INTx7 = 1;
+
+
+    EDIS;
+
+
+    IER |= M_INT1;
+
+    //temp = (float)(1000000/(FREQ_PER*pontos));
+    //Configura timer0
+    InitCpuTimers();
+    ConfigCpuTimer(&CpuTimer0, 200, 40);
+    CpuTimer0Regs.TCR.all = 0x4000;
+
+
+
+/// Setup dos GPIO
+   Setup_GPIO();
+
+/// Setup PWM
+   Setup_ePWM();                                      // Abre todas as chaves
+
+
+//Configura DAC
+
+   Setup_DAC();
+
+   //Criar tabela da senoide
+   for (index = 0; index < pontos; index++){
+       senotable[index] = (int16)(8.14*(sin((6.28318531/pontos)*((float)index))));
+   }
+   index=0;
+
+   EINT;
+   ERTM;
+
+
+   GpioDataRegs.GPBDAT.bit.GPIO34 = 0;
+   GpioDataRegs.GPADAT.bit.GPIO31 = 1;
+
+
+   while(1){
+       for (count = 0; count < 0x00FFFFFF; count++){
+
+   }
+
+   GpioDataRegs.GPBTOGGLE.bit.GPIO34 = 1;
+
+   //temp = (float)(1000000/(FREQ_PER*pontos));
+   //ConfigCpuTimer(&CpuTimer0, 200, temp);
+   }
+
+    //return 0;
+}
+
+
+
+__interrupt void isr_timer0(void){
+
+    //GpioDataRegs.GPATOGGLE.bit.GPIO31 = 1;
+
+    index = (index == (pontos - 1)) ? 0 : (index+1);
+
+    EPwm4Regs.CMPA.bit.CMPA = DutyCycle + senotable[index];
+    EPwm5Regs.CMPA.bit.CMPA = DutyCycle + senotable[index];
+    EPwm6Regs.CMPA.bit.CMPA = DutyCycle + senotable[index];
+
+
+ //   EPwm4Regs.CMPA.bit.CMPA = DutyCycle;
+ //   EPwm5Regs.CMPA.bit.CMPA = DutyCycle;
+  //  EPwm6Regs.CMPA.bit.CMPA = DutyCycle;
+
+    DacaRegs.DACVALS.all =  DutyCycle + senotable[index];
+    DacbRegs.DACVALS.all = (Uint16)(amp*8.14*(1.0+sin((6.28318531/pontos)*((float)index))));
+
+
+
+    PieCtrlRegs.PIEACK.all = PIEACK_GROUP1;
+
+}
+
+void Setup_ePWM(void){
+
+    EALLOW;                    //###### LEMBRAR DE AJUSTAR O FED E RED PARA OS PREESCALES DO TBCLOCK.
+
+    CpuSysRegs.PCLKCR0.bit.TBCLKSYNC = 0;           // DISABLE TBCLK for ePWM configuration.
+
+
+//##########_EPWM4_###################################################################
+
+        EPwm4Regs.TBPRD = TB_Prd;                       // Set timer period TBPR = (EPWMCLK ) / ( 2 x 2 x freq_pwm) for up-down count mode.
+        EPwm4Regs.CMPA.bit.CMPA = 0;  //duty 50%
+
+
+        EPwm4Regs.TBPHS.bit.TBPHS = 0;                   // Set phase register to 0o
+        EPwm4Regs.TBCTL.bit.SYNCOSEL= TB_CTR_ZERO  ;//TB_SYNC_IN  ;
+        EPwm4Regs.TBCTL.bit.CTRMODE = TB_COUNT_UPDOWN;  // Configura a portadora para o modo simétrico(up-down).
+        EPwm4Regs.TBCTR = 0x0000;                       // Limpa o contador.
+        EPwm4Regs.TBCTL.bit.PHSEN = TB_DISABLE;         // Habilita o carregamento das fases.
+        EPwm4Regs.TBCTL.bit.PHSDIR = TB_DOWN;                //Phase up/down
+
+        EPwm4Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;        //TBCLK = EPWMCLK/(HSPCLKDIV*CLKDIV)
+        EPwm4Regs.TBCTL.bit.CLKDIV = 0;      // EPWMCLK/1.
+//        if(TB_Prescale == 1)         EPwm1Regs.TBCTL.bit.CLKDIV = 0;      // EPWMCLK/1.
+//        else if (TB_Prescale == 128) EPwm1Regs.TBCTL.bit.CLKDIV = 7;      // EPWMCLK/128.
+
+        EPwm4Regs.CMPCTL.bit.SHDWAMODE = CC_SHADOW;       //Habilita o shadow como um buffer duplo.
+        EPwm4Regs.CMPCTL.bit.LOADAMODE = CC_CTR_ZERO_PRD; /* Carrega os registradores nos eventos TBCTR = ZERO  e TBCTR = PRD.
+                                                             Necessário pois a senoide apresenta valores diferentes em CAU e CAD.
+                                                           */
+
+        EPwm4Regs.CMPCTL.bit.SHDWBMODE = CC_SHADOW;       //Habilita o shadow como um buffer duplo.
+        EPwm4Regs.CMPCTL.bit.LOADBMODE = CC_CTR_ZERO_PRD;
+
+ //        Configuração do Action Qualifier para geração do SPWM.
+        EPwm4Regs.AQCTLB.bit.PRD = AQ_NO_ACTION;
+        EPwm4Regs.AQCTLB.bit.ZRO = AQ_NO_ACTION;
+        EPwm4Regs.AQCTLB.bit.CAU = AQ_NO_ACTION;
+        EPwm4Regs.AQCTLB.bit.CAD = AQ_NO_ACTION;
+
+        EPwm4Regs.AQCTLA.bit.PRD = AQ_NO_ACTION;
+        EPwm4Regs.AQCTLA.bit.ZRO = AQ_NO_ACTION;
+        EPwm4Regs.AQCTLA.bit.CAU = AQ_CLEAR;
+        EPwm4Regs.AQCTLA.bit.CAD = AQ_SET;
+
+
+//##########_EPWM5_##########################################################################
+
+            EPwm5Regs.TBPRD = TB_Prd;
+            EPwm5Regs.CMPA.bit.CMPA = 0;  //duty 50%
+
+            EPwm5Regs.TBPHS.bit.TBPHS = 952;                       //Set phase register to 120o
+            EPwm5Regs.TBCTL.bit.SYNCOSEL =TB_SYNC_IN ;
+
+            EPwm5Regs.TBCTR = 0x0000;
+            EPwm5Regs.TBCTL.bit.CTRMODE = TB_COUNT_UPDOWN;
+
+            EPwm5Regs.TBCTL.bit.PHSEN = TB_ENABLE;
+            EPwm5Regs.TBCTL.bit.PHSDIR = TB_UP;                //Phase up/down
+
+
+            EPwm5Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;
+            EPwm5Regs.TBCTL.bit.CLKDIV = 0;      // EPWMCLK/1
+
+            EPwm5Regs.CMPCTL.bit.SHDWAMODE = CC_SHADOW;
+            EPwm5Regs.CMPCTL.bit.LOADAMODE = CC_CTR_ZERO_PRD;
+            EPwm5Regs.CMPCTL.bit.SHDWBMODE = CC_SHADOW;
+            EPwm5Regs.CMPCTL.bit.LOADBMODE = CC_CTR_ZERO_PRD;
+
+
+            EPwm5Regs.AQCTLB.bit.PRD = AQ_NO_ACTION;
+            EPwm5Regs.AQCTLB.bit.ZRO = AQ_NO_ACTION;
+            EPwm5Regs.AQCTLB.bit.CAU = AQ_NO_ACTION;
+            EPwm5Regs.AQCTLB.bit.CAD = AQ_NO_ACTION;
+
+
+            EPwm5Regs.AQCTLA.bit.PRD = AQ_NO_ACTION;
+            EPwm5Regs.AQCTLA.bit.ZRO = AQ_NO_ACTION;
+            EPwm5Regs.AQCTLA.bit.CAU = AQ_CLEAR;
+            EPwm5Regs.AQCTLA.bit.CAD = AQ_SET;
+
+ //##########_EPWM6_##########################################################################
+
+        EPwm6Regs.TBPRD = TB_Prd;
+        EPwm6Regs.CMPA.bit.CMPA = 0;  //duty 50%
+
+
+        EPwm6Regs.TBPHS.bit.TBPHS = 952;             ////Set phase register to 240o
+        EPwm6Regs.TBCTL.bit.SYNCOSEL = TB_SYNC_IN;
+
+        EPwm6Regs.TBCTR = 0x0000;
+        EPwm6Regs.TBCTL.bit.CTRMODE = TB_COUNT_UPDOWN;
+
+        EPwm6Regs.TBCTL.bit.PHSEN = TB_ENABLE;
+        EPwm6Regs.TBCTL.bit.PHSDIR = TB_DOWN;                //Phase up/down
+
+        EPwm6Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;
+        EPwm6Regs.TBCTL.bit.CLKDIV = 0;
+
+        EPwm6Regs.CMPCTL.bit.SHDWAMODE = CC_SHADOW;
+        EPwm6Regs.CMPCTL.bit.LOADAMODE = CC_CTR_ZERO_PRD;
+        EPwm6Regs.CMPCTL.bit.SHDWBMODE = CC_SHADOW;
+        EPwm6Regs.CMPCTL.bit.LOADBMODE = CC_CTR_ZERO_PRD;
+
+        EPwm6Regs.AQCTLB.bit.PRD = AQ_NO_ACTION;
+        EPwm6Regs.AQCTLB.bit.ZRO = AQ_NO_ACTION;
+        EPwm6Regs.AQCTLB.bit.CAU = AQ_NO_ACTION;
+        EPwm6Regs.AQCTLB.bit.CAD = AQ_NO_ACTION;
+
+
+        EPwm6Regs.AQCTLA.bit.PRD = AQ_NO_ACTION;
+        EPwm6Regs.AQCTLA.bit.ZRO = AQ_NO_ACTION;
+        EPwm6Regs.AQCTLA.bit.CAU = AQ_CLEAR;
+        EPwm6Regs.AQCTLA.bit.CAD = AQ_SET;
+
+        //##########_EPWM10_##########################################################################
+
+                // PWM sendo utilizado como TIMER , gerando SOC a 102 Khz.
+               // Frequencia de amostragem deve ser um multiplo de 60.
+
+            EPwm10Regs.TBPRD = 489;  // Sampling at 102 Khz / TBPRD = TPWM/TBCLK - 1 -> FAZER O CALCULO COM A FREQ !!
+             EPwm10Regs.TBPHS.bit.TBPHS = 0;
+             EPwm10Regs.TBCTR = 0X0000;
+             EPwm10Regs.TBCTL.bit.CTRMODE= TB_COUNT_UP; // Configura como up count mode.
+
+             // Condigurações padrões para gerar TBCLK = 50 Mhz  ( EPWMCLK = SYSCLKOUT/2 = 100 Mhz , TBCLK = EPWMCLK/(HSPCLKDIV * CLKDIV) );
+             EPwm10Regs.TBCTL.bit.HSPCLKDIV = TB_DIV2;
+             EPwm10Regs.TBCTL.bit.CLKDIV = TB_DIV1 ;
+
+             EPwm10Regs.ETSEL.bit.SOCAEN =1;  // Enable SOC on A group
+             EPwm10Regs.ETSEL.bit.SOCASEL=ET_CTR_PRD ;  // Dispara o SOC em CTR = PRD.
+             EPwm10Regs.ETPS.bit.SOCAPRD = ET_1ST;     // Dispara o SOC no primeiro evento.
+
+             CpuSysRegs.PCLKCR0.bit.TBCLKSYNC = 1;                // ENABLE TBCLKs
+
+             EDIS;
+
+}

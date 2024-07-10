@@ -1,0 +1,92 @@
+/*
+ * Perif_Setup.c
+ *
+ */
+
+#include "Perif_Setup.h"
+
+
+void Setup_GPIO(void){
+    EALLOW;
+
+
+
+    //GPIO34
+    EALLOW;
+    GpioCtrlRegs.GPBGMUX1.bit.GPIO34 = 0;
+    GpioCtrlRegs.GPBMUX1.bit.GPIO34 = 0;
+    GpioCtrlRegs.GPBPUD.bit.GPIO34 = 1;
+    GpioCtrlRegs.GPBDIR.bit.GPIO34 = 1;         //válido apenas para GPIO
+    GpioCtrlRegs.GPBCSEL1.bit.GPIO34 = GPIO_MUX_CPU1;
+
+
+    //IO 31 A, 2 -LED Azul
+    GpioCtrlRegs.GPAGMUX2.bit.GPIO31 = 0;
+    GpioCtrlRegs.GPAMUX2.bit.GPIO31 = 0;
+    GpioCtrlRegs.GPAPUD.bit.GPIO31 = 1;
+    GpioCtrlRegs.GPADIR.bit.GPIO31 = 1;
+    GpioCtrlRegs.GPACSEL4.bit.GPIO31 = GPIO_MUX_CPU1;
+
+
+    //##############################_ePWM 4, 5 e 6_###########################
+
+               GpioCtrlRegs.GPAGMUX1.bit.GPIO6 = 0;
+               GpioCtrlRegs.GPAMUX1.bit.GPIO6 = 1;
+               GpioCtrlRegs.GPAPUD.bit.GPIO6 = 1;
+
+               GpioCtrlRegs.GPAGMUX1.bit.GPIO7 = 0;
+               GpioCtrlRegs.GPAMUX1.bit.GPIO7 = 1;
+               GpioCtrlRegs.GPAPUD.bit.GPIO7 = 1;
+
+
+              GpioCtrlRegs.GPAGMUX1.bit.GPIO8 = 0;
+              GpioCtrlRegs.GPAMUX1.bit.GPIO8 = 1;
+              GpioCtrlRegs.GPAPUD.bit.GPIO8 = 1;
+
+              GpioCtrlRegs.GPAGMUX1.bit.GPIO9 = 0;
+              GpioCtrlRegs.GPAMUX1.bit.GPIO9= 1;
+              GpioCtrlRegs.GPAPUD.bit.GPIO9= 1;
+
+
+              GpioCtrlRegs.GPAGMUX1.bit.GPIO10 = 0;
+              GpioCtrlRegs.GPAMUX1.bit.GPIO10 = 1;
+              GpioCtrlRegs.GPAPUD.bit.GPIO10 = 1;
+
+              GpioCtrlRegs.GPAGMUX1.bit.GPIO11 = 0;
+              GpioCtrlRegs.GPAMUX1.bit.GPIO11 = 1;
+              GpioCtrlRegs.GPAPUD.bit.GPIO11 = 1;
+
+
+    EDIS;
+}
+
+//############# DAC
+
+void Setup_DAC(void)
+{
+    EALLOW;
+
+   DacbRegs.DACCTL.all = 0x0001;
+   DacbRegs.DACVALS.all = 0x0800;
+   DacbRegs.DACOUTEN.bit.DACOUTEN = 1;
+   DacbRegs.DACLOCK.all = 0x0000;
+
+   DacaRegs.DACCTL.all = 0x0001;
+   DacaRegs.DACVALS.all = 0x0800;
+   DacaRegs.DACOUTEN.bit.DACOUTEN = 1;
+   DacaRegs.DACLOCK.all = 0x0000;
+
+   EDIS;
+
+
+}
+
+
+
+
+
+
+
+
+
+
